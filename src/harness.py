@@ -20,17 +20,20 @@ class RAGHarness:
         
     async def stt_sarvam(self, audio_bytes: bytes) -> str:
         """Calls Sarvam STT asynchronously."""
-        # Note: In a real implementation, you'd hit https://api.sarvam.ai/speech-to-text
-        # Mocking for the hackathon skeleton if API key is not present
         if not self.sarvam_api_key:
             await asyncio.sleep(0.05) # mock 50ms latency
             return "What is the capital of India?"
             
         async with httpx.AsyncClient() as client:
-            # Implement real HTTP call here
-            # e.g., files={'file': audio_bytes}
-            pass
-        return ""
+            headers = {"api-subscription-key": self.sarvam_api_key}
+            files = {"file": ("audio.wav", audio_bytes, "audio/wav")}
+            data = {"prompt": ""}
+            try:
+                response = await client.post("https://api.sarvam.ai/speech-to-text-translate", headers=headers, files=files, data=data)
+                response.raise_for_status()
+                return response.json().get("transcript", "Failed to parse transcript")
+            except Exception as e:
+                return f"STT Error: {str(e)}"
 
     async def generate_answer(self, query: str, context: str) -> str:
         """Calls Groq API for ultra-fast generation."""
@@ -52,24 +55,31 @@ class RAGHarness:
         }
         
         payload = {
-            "model": "llama3-8b-8192",
+            "model": "openai/gpt-oss-20b",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": query}
             ],
             "temperature": 0.1,
-            "max_tokens": 100 # Keep it short for voice
+            "max_tokens": 1024 # Increased to allow reasoning tokens to finish so content is not blank
         }
         
         async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers=headers,
-                json=payload
-            )
-            response.raise_for_status()
-            data = response.json()
-            return data["choices"][0]["message"]["content"]
+            try:
+                response = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers=headers,
+                    json=payload
+                )
+                response.raise_for_status()
+                data = response.json()
+                return data["choices"][0]["message"]["content"]
+            except httpx.HTTPStatusError as e:
+                print(f"Groq HTTP Error: {e.response.text}")
+                return f"Groq API Error: {e.response.status_code} - {e.response.text}"
+            except Exception as e:
+                print(f"Groq General Error: {str(e)}")
+                return f"Groq Error: {str(e)}"
 
     async def process_voice_query(self, audio_bytes: bytes) -> Tuple[str, Dict[str, float]]:
         """
@@ -82,6 +92,7 @@ class RAGHarness:
         # 1. Speech-to-Text
         transcribed_text = await self.stt_sarvam(audio_bytes)
         metrics["stt_latency_ms"] = (time.perf_counter() - t0) * 1000
+        metrics["transcription"] = transcribed_text
         
         # 2. Input Guardrails
         t_guard = time.perf_counter()

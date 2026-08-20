@@ -7,3 +7,4 @@ pydantic
 numpy
 pandas
 python-dotenv
+gradio

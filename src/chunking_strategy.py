@@ -19,9 +19,9 @@ class AdvancedChunker:
             self.model = SentenceTransformer(semantic_model_name)
             self.cosine_similarity = cosine_similarity
             self.np = np
-        except ImportError:
+        except Exception as e:
             self.model = None
-            print("Warning: sentence_transformers or sklearn not installed. Semantic chunking will fallback to recursive.")
+            print(f"Warning: Failed to load semantic model due to {e}. Semantic chunking will fallback to recursive.")
 
     def _split_into_sentences(self, text: str) -> List[str]:
         """Simple regex-based sentence splitter."""
