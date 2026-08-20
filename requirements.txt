@@ -1,0 +1,9 @@
+datasets
+faiss-cpu
+sentence-transformers
+groq
+httpx
+pydantic
+numpy
+pandas
+python-dotenv
