@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 async def test():
-    client = httpx.AsyncClient()
+    client =  httpx.AsyncClient()
     headers = {'Authorization': f"Bearer {os.environ.get('GROQ_API_KEY')}"}
     payload = {
         'model': 'llama-3.1-8b-instant',

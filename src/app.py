@@ -1,4 +1,11 @@
 import os
+import sys
+
+# Force HuggingFace to use only local cache — prevents slow/hung network calls on startup
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
 import asyncio
 import numpy as np
 import gradio as gr
@@ -14,14 +21,16 @@ load_dotenv()
 print("Initializing Voice RAG System...")
 
 # Initialize components
+print("Loading embedding model...")
 chunker = AdvancedChunker()
+print("Embedding model loaded!")
 vector_db = FastVectorDB()
 
 from dataset import get_msmarco_passages
 
 # Load a small sample of the MS MARCO dataset (e.g., first 5 queries' passages)
 print("Loading real dataset passages...")
-msmarco_passages = get_msmarco_passages(limit=5)
+msmarco_passages = get_msmarco_passages(limit=100)
 
 all_chunks = []
 for i, passage_text in enumerate(msmarco_passages):
@@ -29,14 +38,15 @@ for i, passage_text in enumerate(msmarco_passages):
     doc_chunks = chunker.process_document(f"msmarco_doc_{i}", f"Passage {i}", passage_text)
     all_chunks.extend(doc_chunks)
 
-# Mock embeddings (since we don't have a real dataset fully embedded yet)
-# In production, use self.embedding_model.encode() on the chunks
-embeddings = [np.random.rand(384) for _ in all_chunks]
+# Generate real embeddings using the chunker's semantic model
+print("Generating actual embeddings... this might take a moment")
+chunk_texts = [c.text for c in all_chunks]
+embeddings = chunker.model.encode(chunk_texts)
 vector_db.add_documents(embeddings, [c.model_dump() for c in all_chunks])
 print(f"Indexed {len(all_chunks)} chunks into FastVectorDB!")
 
 # Initialize Harness
-harness = RAGHarness(vector_db=vector_db, chunker=chunker)
+harness = RAGHarness(vector_db=vector_db, chunker=chunker, embedding_model=chunker.model)
 
 async def process_audio(audio_path):
     if audio_path is None:

@@ -37,6 +37,7 @@ class RAGHarness:
 
     async def generate_answer(self, query: str, context: str) -> str:
         """Calls Groq API for ultra-fast generation."""
+        import re
         if not self.groq_api_key:
             await asyncio.sleep(0.05)
             return "Based on the context, the capital of India is New Delhi."
@@ -55,16 +56,16 @@ class RAGHarness:
         }
         
         payload = {
-            "model": "openai/gpt-oss-20b",
+            "model": "qwen/qwen3.6-27b",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": query}
             ],
             "temperature": 0.1,
-            "max_tokens": 1024 # Increased to allow reasoning tokens to finish so content is not blank
+            "max_tokens": 1024
         }
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 response = await client.post(
                     "https://api.groq.com/openai/v1/chat/completions",
@@ -73,7 +74,10 @@ class RAGHarness:
                 )
                 response.raise_for_status()
                 data = response.json()
-                return data["choices"][0]["message"]["content"]
+                raw = data["choices"][0]["message"]["content"]
+                # Strip <think>...</think> reasoning blocks from qwen model output
+                clean = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+                return clean if clean else raw.strip()
             except httpx.HTTPStatusError as e:
                 print(f"Groq HTTP Error: {e.response.text}")
                 return f"Groq API Error: {e.response.status_code} - {e.response.text}"
